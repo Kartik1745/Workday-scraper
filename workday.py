@@ -22,15 +22,15 @@ wait = WebDriverWait(driver, 10)
 
 company_urls = [
     'https://mastercard.wd1.myworkdayjobs.com/en-US/CorporateCareers', 
-    ]  # Add your company URLs here
+]  # Add your company URLs here
 
 for company_url in company_urls:
     if company_url not in job_ids_dict:
         job_ids_dict[company_url] = []
 
 while True:
-    job_urls = []
-    jobstosend =[]
+    jobstosend = []
+
     for company_url in company_urls:
         driver.get(company_url)
 
@@ -49,9 +49,10 @@ while True:
                 posted_on = posted_on_element.text
                 if 'posted today' in posted_on.lower():
                     job_href = job_title_element.get_attribute('href')
+                    job_title = job_title_element.text
                     if job_id not in job_ids_dict[company_url]:
                         job_ids_dict[company_url].append(job_id)
-                        job_urls.append(job_href)
+                        jobstosend.append((job_title, job_href))
                     else:
                         print(f"Job ID {job_id} already in job_ids_dict")
                 else:
@@ -64,22 +65,22 @@ while True:
             next_button.click()
 
     print(len(job_ids_dict[company_urls[0]]))
-    print(len(job_urls))
+    print(len(jobstosend))
 
     jobs = []
 
-    for job_url in job_urls:
-        driver.get(job_url)
+    for job_title, job_href in jobstosend:
+        driver.get(job_href)
         job_posting_element = wait.until(EC.presence_of_element_located((By.XPATH, '//div[@data-automation-id="job-posting-details"]')))
         job_posting_text = job_posting_element.text
-        jobs.append(job_posting_text)
+        jobs.append((job_title, job_href, job_posting_text))
 
     # Write job postings to a CSV file
     with open('job_postings.csv', 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(['Job Posting'])
+        writer.writerow(['Job Title', 'Job Href', 'Job Posting'])
         for job in jobs:
-            writer.writerow([job])
+            writer.writerow(job)
 
     # Save job_ids_dict to file
     with open('job_ids_dict.pkl', 'wb') as f:
