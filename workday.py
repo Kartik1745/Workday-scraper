@@ -6,15 +6,25 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 import time
+import redis
+import os
+import json
+import uuid
 
 DRIVER_PATH = '/Users/kartikpatil/Downloads/chromedriver'
 
+r = redis.Redis(
+    host='us1-ideal-aphid-38023.upstash.io',
+    port=38023,
+    password=os.environ.get('REDIS_PASS')
+)
+
 # Load or initialize job_ids_dict from file
 try:
-    with open('job_ids_dict.pkl', 'rb') as f:
-        job_ids_dict = pickle.load(f)
+        with open('job_ids_dict.pkl', 'rb') as f:
+                job_ids_dict = pickle.load(f)
 except FileNotFoundError:
-    job_ids_dict = {}
+        job_ids_dict = {}
 
 driver = webdriver.Chrome()
 
@@ -73,6 +83,9 @@ while True:
         driver.get(job_href)
         job_posting_element = wait.until(EC.presence_of_element_located((By.XPATH, '//div[@data-automation-id="job-posting-details"]')))
         job_posting_text = job_posting_element.text
+        redis_id = str(uuid.uuid4())
+        job_info = {'job_title': job_title, 'job_href': job_href, 'job_posting_text': job_posting_text}
+        r.hset(redis_id, 'job_info', json.dumps(job_info))
         jobs.append((job_title, job_href, job_posting_text))
 
     # Write job postings to a CSV file
