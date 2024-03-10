@@ -1,148 +1,101 @@
 import csv 
+import pickle
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
+import time
+import uuid
 
-DRIVER_PATH = '/Users/kartikpatil/Downloads/chromedriver'
-# options = Options()
-# options.headless = True
-# options.add_argument("--window-size=0,0")
+# Load or initialize job_ids_dict from file
+try:
+        with open('job_ids_dict.pkl', 'rb') as f:
+                job_ids_dict = pickle.load(f)
+except FileNotFoundError:
+        job_ids_dict = {}
+
 driver = webdriver.Chrome()
 
-# Adjust the timeout as per your requirement
 wait = WebDriverWait(driver, 10)
 
-driver.get('https://mastercard.wd1.myworkdayjobs.com/en-US/CorporateCareers')
+company_urls = [
+    'https://mastercard.wd1.myworkdayjobs.com/en-US/CorporateCareers',
+    # 'https://intel.wd1.myworkdayjobs.com/en-US/External',
+    # 'https://trimble.wd1.myworkdayjobs.com/en-US/TrimbleCareers/',
+    'https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite',
+    # 'https://cvshealth.wd1.myworkdayjobs.com/CVS_Health_Careers',
+    # 'https://motorolasolutions.wd5.myworkdayjobs.com/en-US/Careers/',
+    # 'https://bah.wd1.myworkdayjobs.com/en-US/BAH_Jobs', 
+]  # Add your company URLs here
 
-# Wait until at least one job element is present on the page
-wait.until(EC.presence_of_element_located((By.XPATH, '//li[@class="css-1q2dra3"]')))
+for company_url in company_urls:
+    if company_url not in job_ids_dict:
+        job_ids_dict[company_url] = []
 
-job_elements = driver.find_elements(By.XPATH, '//li[@class="css-1q2dra3"]')
+while True:
+    jobs = []
+    for company_url in company_urls:
+        jobstosend = []
+        driver.get(company_url)
+        seturl = company_url
+        try:
+            today = True
+            while today:
+                time.sleep(2)
+                wait.until(EC.presence_of_element_located((By.XPATH, '//li[@class="css-1q2dra3"]')))
+                
+                job_elements = driver.find_elements(By.XPATH, '//li[@class="css-1q2dra3"]')
 
-jobs = []
+                for job_element in job_elements:
+                    job_title_element = job_element.find_element(By.XPATH, './/h3/a')
+                    job_id_element = job_element.find_element(By.XPATH, './/ul[@data-automation-id="subtitle"]/li')
+                    job_id = job_id_element.text
+                    posted_on_element = job_element.find_element(By.XPATH, './/dd[@class="css-129m7dg"][preceding-sibling::dt[contains(text(),"posted on")]]')
+                    posted_on = posted_on_element.text
+                    if 'posted today' in posted_on.lower():
+                        job_href = job_title_element.get_attribute('href')
+                        job_title = job_title_element.text
+                        if job_id not in job_ids_dict[company_url]:
+                            job_ids_dict[company_url].append(job_id)
+                            jobstosend.append((job_title, job_href))
+                        else:
+                            print(f"Job ID {job_id} already in job_ids_dict")
+                    else:
+                        today = False
 
-for job_element in job_elements:
-    job_title_element = job_element.find_element(By.XPATH, './/h3/a')
-    job_title = job_title_element.text
-    job_href = job_title_element.get_attribute('href')
-    
-    # location_element = job_element.find_element(By.XPATH, './/dd[@class="css-129m7dg"]')
-    # location = location_element.text
+                next_button = driver.find_element(By.XPATH, '//button[@data-uxi-element-id="next"]')
+                if "disabled" in next_button.get_attribute("class"):
+                    break  # exit loop if the "next" button is disabled
+                
+                next_button.click()
+        except Exception as e:
+            print(f"An error occurred while processing {company_url}: {str(e)}")
+            continue
 
-    # job_id_element = job_element.find_element(By.XPATH, './/ul[@data-automation-id="subtitle"]/li')
-    # job_id = job_id_element.text
-    
-    posted_on_element = job_element.find_element(By.XPATH, './/dd[@class="css-129m7dg"][preceding-sibling::dt[contains(text(),"posted on")]]')
-    posted_on = posted_on_element.text
-    
-    if "posted today" in posted_on.lower():
-        job_title_element.click()
-        
-        # Wait for the job description to load
-        job_description_element = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, '[aria-label="Job Posting Description"]')))
-        
-        # Extract job description
-        job_description = job_description_element.text
+        print(len(job_ids_dict[company_urls[0]]))
+        print(len(jobstosend))
 
-        locations_elements = job_description_element.find_elements(By.CSS_SELECTOR, "div[data-automation-id='locations'] dd.css-129m7dg")
-        locations = []
-        for location_element in locations_elements:
-            locations.append(location_element.text)
-       
-        # Append job details to the list
-        # jobs.append({'title': job_title,'job-id':job_id ,'href': job_href, 'location': locations, 'posted_on': posted_on, 'description': job_description})
-        
-        jobs.append({'title': job_title,'href': job_href, 'location': locations, 'posted_on': posted_on, 'description': job_description})
-
-        # Go back to the previous page
-        driver.back()
-        
-        # Wait until the job elements are loaded again
-        wait.until(EC.presence_of_element_located((By.XPATH, '//li[@class="css-1q2dra3"]')))
-        
-        # Re-find the job elements
-        job_elements = driver.find_elements(By.XPATH, '//li[@class="css-1q2dra3"]')
-        
-    # jobs.append({'title': job_title,'job-id':job_id ,'href': job_href, 'location': location, 'posted_on': posted_on, 'description': job_description})
-
-driver.quit()
-
-# Write the jobs to a CSV file
-with open('jobs.csv', mode='w', newline='', encoding='utf-8') as file:
-    fieldnames = ['title', 'job-id', 'href', 'location', 'posted_on', 'description']
-    writer = csv.DictWriter(file, fieldnames=fieldnames)
-
-    writer.writeheader()
-    for job in jobs:
-        writer.writerow(job)
-
-print("Jobs saved to jobs.csv")
-
-
+        for job_title, job_href in jobstosend:
+            driver.get(job_href)
+            time.sleep(1)
+            job_posting_element = wait.until(EC.presence_of_element_located((By.XPATH, '//div[@data-automation-id="job-posting-details"]')))
+            job_posting_text = job_posting_element.text
+            redis_id = str(uuid.uuid4())
+            job_info = {'company_url': seturl,'job_title': job_title, 'job_href': job_href, 'job_posting_text': job_posting_text}
+            jobs.append((seturl, job_title, job_href, job_posting_text))
 
 
-# v1 code
+    # Write job postings to a CSV file
+    with open('job_postings.csv', 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(['companyurl','Job Title', 'Job Href', 'Job Posting'])
+        for job in jobs:
+            writer.writerow(job)
 
-# from selenium import webdriver
-# from selenium.webdriver.common.by import By
-# from selenium.webdriver.support.ui import WebDriverWait
-# from selenium.webdriver.support import expected_conditions as EC
-# from selenium.webdriver.chrome.options import Options
+    # Save job_ids_dict to file
+        with open('job_ids_dict.pkl', 'wb') as f:
+            pickle.dump(job_ids_dict, f)
 
-# DRIVER_PATH = '/Users/kartikpatil/Downloads/chromedriver'
-# options = Options()
-# options.headless = True
-# options.add_argument("--window-size=0,0")
-# driver = webdriver.Chrome(options=options)
-
-# # Adjust the timeout as per your requirement
-# wait = WebDriverWait(driver, 5)
-
-# driver.get('https://walmart.wd5.myworkdayjobs.com/en-US/WalmartExternal')
-
-# # Wait until at least one job element is present on the page
-# wait.until(EC.presence_of_element_located((By.XPATH, '//li[@class="css-1q2dra3"]')))
-
-# # print(driver.page_source)
-
-# job_info = driver.find_elements(By.XPATH, '//li[@class="css-1q2dra3"]')
-
-# # print(job_info)
-
-# jobs = []
-
-# for job in job_info:
-#     jobs.append(job.text)
-
-# driver.quit()
-
-# print(jobs[0])
-
-# previous code
-
-# from selenium import webdriver
-# from selenium.webdriver.common.by import By
-
-# DRIVER_PATH = '/Users/kartikpatil/Downloads/chromedriver'
-# driver = webdriver.Chrome()
-
-# # driver = webdriver.Chrome(executable_path='/Users/kartikpatil/Downloads/chromedriver')
-
-# driver.get('https://mastercard.wd1.myworkdayjobs.com/en-US/CorporateCareers')
-
-# print(driver.page_source)
-
-# job_info = driver.find_elements(By.XPATH, '//li[@class="css-1q2dra3"]')
-
-# print(job_info)
-
-# jobs = []
-
-# for job in job_info:
-#     jobs.append(job.text)
-
-# driver.quit()
-
-# print(jobs)
+    # Wait for a certain period before running again
+    time.sleep(600)  # Run every hour

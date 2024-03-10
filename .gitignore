@@ -1,3 +1,7 @@
 venv
 jobs.csv
 __pycache__
+job_postings.csv
+job_ids_dict.pkl
+.env
+ex.txt
